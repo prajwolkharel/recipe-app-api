@@ -1,35 +1,66 @@
+# Define the version of the Docker Compose configuration file.
+# Version 3.9 is used to specify the features and capabilities supported by Docker Compose.
 version: "3.9"
 
+# Services define the containers that will run as part of the Docker Compose environment.
 services:
+  # The 'app' service is our main application service, typically a Django or Flask app.
   app:
     build:
+      # The 'context' is the directory containing the Dockerfile. This tells Docker where to look for the build context (current directory '.').
       context: .
+
+      # 'args' allows us to pass build-time arguments to the Dockerfile. Here, we are passing `DEV=true`, which might control behavior in the Dockerfile (e.g., enabling debug mode or installing development dependencies).
       args:
         - DEV=true
+
+    # The ports mapping allows the container’s internal port (8000) to be accessible on the host machine's port (8000).
+    # This is typical for web applications that need to be accessed locally.
     ports:
       - "8000:8000"
+
+    # 'volumes' mount a directory from the host into the container. Here, it maps './app' (the app's source code) to '/app' inside the container.
+    # This enables live code changes on the host to reflect immediately in the container, useful for development.
     volumes:
       - ./app:/app
+
+    # 'command' overrides the default command for the container with a custom shell script. This script ensures that:
+    # 1. The app waits for the database to be available (via `wait_for_db`).
+    # 2. It runs any pending database migrations (`migrate`).
+    # 3. It starts the web server (`runserver`) listening on all interfaces (0.0.0.0) on port 8000.
     command: >
       sh -c "python manage.py wait_for_db &&
              python manage.py migrate &&
              python manage.py runserver 0.0.0.0:8000"
+
+    # 'environment' defines environment variables for the application. Here, we set up the database connection details.
     environment:
-      - DB_HOST=db
-      - DB_NAME=devdb
-      - DB_USER=devuser
-      - DB_PASS=changeme
+      - DB_HOST=db  # The 'db' container is defined below, and this ensures the app knows where to find it.
+      - DB_NAME=devdb  # The name of the database the app will use.
+      - DB_USER=devuser  # Username to connect to the database.
+      - DB_PASS=changeme  # Password for the database connection.
+
+    # 'depends_on' ensures that the app container will only start after the 'db' container is up and running.
+    # It doesn't guarantee the DB is ready, but it ensures the order of startup.
     depends_on:
       - db
-      
+
+  # The 'db' service defines the PostgreSQL database container.
   db:
+    # The 'image' specifies the Docker image for PostgreSQL (version 13 on Alpine Linux for a small image size).
     image: postgres:13-alpine
+
+    # 'volumes' persist the database data by mapping a Docker volume to the PostgreSQL data directory.
+    # This ensures data is not lost when the container is restarted.
     volumes:
       - dev-db-data:/var/lib/postgresql/data
-    environment:
-      - POSTGRES_DB=devdb
-      - POSTGRES_USER=devuser
-      - POSTGRES_PASSWORD=changeme
 
+    # 'environment' sets environment variables specific to the PostgreSQL container, used to initialize the database on startup.
+    environment:
+      - POSTGRES_DB=devdb  # Specifies the name of the database to be created when the container starts.
+      - POSTGRES_USER=devuser  # Sets the username to access the database.
+      - POSTGRES_PASSWORD=changeme  # Sets the password for the database user.
+
+# Volumes are defined here for persistent data storage. The 'dev-db-data' volume ensures database data is retained across container restarts.
 volumes:
   dev-db-data:
